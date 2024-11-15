@@ -5,31 +5,74 @@ date: "2024-11-01"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE, message=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include=TRUE, message=FALSE,warning=FALSE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+Library setup for assessment ahead.
+```{r warning=FALSE}
+library(tidyverse)
+library(janitor) # cleaning data
+library(gt) # tables
+library(here)# directory structure (will be useful later)
+library(knitr)
 ```
 
-## Including Plots
+In this assessment, I will be looking at heart medication prescriptions in Scotland. It would be interesting to understand what relationship, if any, exists between SIMD index and/or age. If there is some way to understand regions where high blood pressure or obesity is prevalent and see if there is a trend that exists.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+In the first section I will look at types of medications prescribed in each health board, viewing which has been prescribed the most and the costs associated. I will be focusing on January 2024.
+Section 1 - Create dataset from Public health Scotland using 'Prescriptions in the Community','Healthboard Names' and then clean it to use for further analysis
 ```{r}
-#hello my name is abdou
-#hello my name is abdou 2
+Jan2024prescrip <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/d3eaaf84-0f3b-4fb8-9460-e33503095fbe/download/pitc202401.csv") %>% 
+  clean_names()
+
+HB_names <- read.csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv")
+
+Special_HB_names_6digit <- read.csv("https://www.opendata.nhs.scot/dataset/65402d20-f0f1-4cee-a4f9-a960ca560444/resource/0450a5a2-f600-4569-a9ae-5d6317141899/download/special-health-boards_19022021.csv")
+
+Jan2024prescripclean <- Jan2024prescrip  %>% 
+  mutate(BNF_Drug_Class = case_when(
+    str_detect(bnf_item_code, "^010") ~ "Gastro-Intestintal Drugs",
+    str_detect(bnf_item_code, "^020") ~ "Cardiovascular Drugs",
+    str_detect(bnf_item_code, "^030") ~ "Respiratory Drugs",
+    str_detect(bnf_item_code, "^040") ~ "Central Nervous System Drugs",
+    str_detect(bnf_item_code, "^050") ~ "Drugs for Infections",
+    str_detect(bnf_item_code, "^060") ~ "Endocrine Drugs",
+    str_detect(bnf_item_code, "^070") ~ "Obstetric, Gynaecology and Urinary Tract Drugs",
+    str_detect(bnf_item_code, "^080") ~ "Malignant Disease and Immunosupression Drugs",
+    str_detect(bnf_item_code, "^090") ~ "Drugs for Nutrution and Blood",
+    str_detect(bnf_item_code, "^10") ~ "Musculoskeletal and Joint Disease Drugs",
+    str_detect(bnf_item_code, "^11") ~ "Eye Drugs",
+    str_detect(bnf_item_code, "^12") ~ "Ear. Nose and Oropharynx Drugs",
+    str_detect(bnf_item_code, "^13") ~ "Skin Drugs",
+    str_detect(bnf_item_code, "^14") ~ "Immunological Products and Vaccines",
+    str_detect(bnf_item_code, "^15") ~ "Anaesthesia",
+    str_detect(bnf_item_code, "^18") ~ "Preparations used in Diagnosis",
+    str_detect(bnf_item_code, "^19") ~ "Other Drugs and Preparations",
+    str_detect(bnf_item_code, "^20") ~ "Dressings",
+    str_detect(bnf_item_code, "^21") ~ "Appliances",
+    str_detect(bnf_item_code, "^22") ~ "Incontinence Appliances",
+    str_detect(bnf_item_code, "^23") ~ "Stoma Appliances"
+  )) %>% 
+  full_join(HB_names, by = c("hbt" = "HB")) %>%
+  filter(!is.na(BNF_Drug_Class)) %>% 
+  select(hbt,HBName,BNF_Drug_Class,bnf_item_description,number_of_paid_items:gross_ingredient_cost)
+
+Jan2024prescripclean <- Jan2024prescripclean[Reduce(`&`, lapply(Jan2024prescripclean, function(x) !(is.na(x)|x==""))),]  
+
+analysis <- Jan2024prescripclean %>% 
+  group_by(HBName,BNF_Drug_Class) %>%
+  summarise(Total_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost)) %>%
+  mutate(Total_cost = Total_quantity*Average_cost) %>% 
+  filter(BNF_Drug_Class == 'Cardiovascular Drugs')
+
+figure1 <- analysis %>% 
+  ggplot(aes(x = HBName, y = Total_quantity)) +
+  geom_col(aes(fill = BNF_Drug_Class)) +
+  coord_flip() +
+  labs(x = "Health Board", y = "Total Quantity of Each Drug Class", title = "Drug Classes Across Each Health Board")
+
+print(figure1)
+
 ```
 
