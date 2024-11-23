@@ -4,7 +4,18 @@ author: "AbdelRahman Hassane"
 date: "2024-11-01"
 output: html_document
 ---
+<style type="text/css">
 
+body, td {
+   font-size: 14px;
+}
+code.r{
+  font-size: 12px;
+}
+pre {
+  font-size: 12px
+}
+</style>
 ```{r setup, include=FALSE, message=FALSE,warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE, include=TRUE, message=FALSE,warning=FALSE)
 ```
@@ -14,65 +25,70 @@ Library setup for assessment ahead.
 library(tidyverse)
 library(janitor) # cleaning data
 library(gt) # tables
-library(here)# directory structure (will be useful later)
+library(here)# directory structure
 library(knitr)
+library(readxl)
+library(paletteer)
 ```
 
-In this assessment, I will be looking at heart medication prescriptions in Scotland. It would be interesting to understand what relationship, if any, exists between SIMD index and/or age. If there is some way to understand regions where high blood pressure or obesity is prevalent and see if there is a trend that exists.
+In this assessment, I will be looking at heart medication prescriptions in Scotland, specifically statins. There are 5 major statins prescribed in the NHS: atorvastatin,fluvastatin, pravastatin, rosuvastatin, simvastatin. Statins are effective medications for lowering the risk of heart disease or stroke as they reduce build up of LDL cholesterol, the bad kind, which can lead to artery narrowing and blockages. If left to accumulate, this could lead to a heart attack or stroke.
 
-In the first section I will look at types of medications prescribed in each health board, viewing which has been prescribed the most and the costs associated. I will be focusing on January 2024.
-Section 1 - Create dataset from Public health Scotland using 'Prescriptions in the Community','Healthboard Names' and then clean it to use for further analysis
-```{r}
-Jan2024prescrip <- read.csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/d3eaaf84-0f3b-4fb8-9460-e33503095fbe/download/pitc202401.csv") %>% 
+In the first section I will look at statins prescribed in each health board, viewing the most prescribed and the associated costs. I will be focusing on January 2024 data.
+
+#Section 1
+```{r dataset import for figure 1 and rest of assessment}
+#Import dataset for prescriptions in January 2024 from opendata, Public Health Scotland using the link below.
+Jan2024prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/d3eaaf84-0f3b-4fb8-9460-e33503095fbe/download/pitc202401.csv") %>% 
   clean_names()
+#Import health board names from opendata, Public Health Scotland using the link below.
+HB_names <- read_csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv")
+#Import population dataset estimates for healthboards from opendata, Public Health Scotland using the link below.
+HB_populations <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-4813-b25c-f7f335bdc4dc/resource/27a72cc8-d6d8-430c-8b4f-3109a9ceadb1/download/hb2019_pop_est_14102024.csv") %>% 
+  clean_names()
+```
 
-HB_names <- read.csv("https://www.opendata.nhs.scot/dataset/9f942fdb-e59e-44f5-b534-d6e17229cc7b/resource/652ff726-e676-4a20-abda-435b98dd7bdc/download/hb14_hb19.csv")
-
-Special_HB_names_6digit <- read.csv("https://www.opendata.nhs.scot/dataset/65402d20-f0f1-4cee-a4f9-a960ca560444/resource/0450a5a2-f600-4569-a9ae-5d6317141899/download/special-health-boards_19022021.csv")
-
+```{r January 2024, distribution of statins amongst Scottish health boards}
+#focusing on health board populations for year 2023 as its the most recent.
+population_2023 <- HB_populations %>% 
+  filter(sex == 'All', year == 2023, !hb == 'S92000003') %>% 
+  select(year,hb,all_ages) %>% 
+  full_join(HB_names, by = c("hb" = "HB")) %>% 
+  filter(!is.na(all_ages)) %>% 
+  select(hb,HBName,all_ages) %>% 
+  rename(population2023 = all_ages)
+#clean the January 2024 prescriptions dataset with a focus on statins.
 Jan2024prescripclean <- Jan2024prescrip  %>% 
-  mutate(BNF_Drug_Class = case_when(
-    str_detect(bnf_item_code, "^010") ~ "Gastro-Intestintal Drugs",
-    str_detect(bnf_item_code, "^020") ~ "Cardiovascular Drugs",
-    str_detect(bnf_item_code, "^030") ~ "Respiratory Drugs",
-    str_detect(bnf_item_code, "^040") ~ "Central Nervous System Drugs",
-    str_detect(bnf_item_code, "^050") ~ "Drugs for Infections",
-    str_detect(bnf_item_code, "^060") ~ "Endocrine Drugs",
-    str_detect(bnf_item_code, "^070") ~ "Obstetric, Gynaecology and Urinary Tract Drugs",
-    str_detect(bnf_item_code, "^080") ~ "Malignant Disease and Immunosupression Drugs",
-    str_detect(bnf_item_code, "^090") ~ "Drugs for Nutrution and Blood",
-    str_detect(bnf_item_code, "^10") ~ "Musculoskeletal and Joint Disease Drugs",
-    str_detect(bnf_item_code, "^11") ~ "Eye Drugs",
-    str_detect(bnf_item_code, "^12") ~ "Ear. Nose and Oropharynx Drugs",
-    str_detect(bnf_item_code, "^13") ~ "Skin Drugs",
-    str_detect(bnf_item_code, "^14") ~ "Immunological Products and Vaccines",
-    str_detect(bnf_item_code, "^15") ~ "Anaesthesia",
-    str_detect(bnf_item_code, "^18") ~ "Preparations used in Diagnosis",
-    str_detect(bnf_item_code, "^19") ~ "Other Drugs and Preparations",
-    str_detect(bnf_item_code, "^20") ~ "Dressings",
-    str_detect(bnf_item_code, "^21") ~ "Appliances",
-    str_detect(bnf_item_code, "^22") ~ "Incontinence Appliances",
-    str_detect(bnf_item_code, "^23") ~ "Stoma Appliances"
-  )) %>% 
+#creating a new column for statins and simplifying different dosages into one name for simpler analysis.
+  mutate(BNF_Drug_Statins = case_when(
+    str_detect(bnf_item_description, "^ATORVASTATIN") ~ "atorvastatin",
+    str_detect(bnf_item_description, "^FLUVASTATIN") ~ "fluvastatin",
+    str_detect(bnf_item_description, "^PRAVASTATIN") ~ "pravastatin",
+    str_detect(bnf_item_description, "^ROSUVASTATIN") ~ "rosuvastatin",
+    str_detect(bnf_item_description, "^SIMVASTATIN") ~ "simvastatin")) %>% 
+#joining health board names with the January 2024 prescription dataset.
   full_join(HB_names, by = c("hbt" = "HB")) %>%
-  filter(!is.na(BNF_Drug_Class)) %>% 
-  select(hbt,HBName,BNF_Drug_Class,bnf_item_description,number_of_paid_items:gross_ingredient_cost)
+  filter(bnf_item_description!="", !is.na(BNF_Drug_Statins)) %>% 
+  select(hbt,HBName,BNF_Drug_Statins,bnf_item_description,number_of_paid_items:gross_ingredient_cost) %>%
+#joining 2023 population dataset with the January 2024 prescription dataset.
+  full_join(population_2023, by = c("hbt" = "hb")) %>% 
+  group_by(HBName.x, BNF_Drug_Statins, population2023) %>% 
+  summarise(Total_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost), Total_quantity_per_head = Total_quantity/mean(population2023))
 
-Jan2024prescripclean <- Jan2024prescripclean[Reduce(`&`, lapply(Jan2024prescripclean, function(x) !(is.na(x)|x==""))),]  
-
-analysis <- Jan2024prescripclean %>% 
-  group_by(HBName,BNF_Drug_Class) %>%
-  summarise(Total_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost)) %>%
-  mutate(Total_cost = Total_quantity*Average_cost) %>% 
-  filter(BNF_Drug_Class == 'Cardiovascular Drugs')
-
-figure1 <- analysis %>% 
-  ggplot(aes(x = HBName, y = Total_quantity)) +
-  geom_col(aes(fill = BNF_Drug_Class)) +
-  coord_flip() +
-  labs(x = "Health Board", y = "Total Quantity of Each Drug Class", title = "Drug Classes Across Each Health Board")
-
+#Plotting a stacked bar chart to allow for comparison of different health boards in one plot.
+figure1 <- Jan2024prescripclean %>% 
+  ggplot(aes(x = Total_quantity_per_head, y = reorder(HBName.x, Total_quantity_per_head))) +
+  geom_col(aes(fill = BNF_Drug_Statins)) +
+  theme_classic() +
+  scale_fill_paletteer_d("ggsci::default_locuszoom", name = "Types of Statin", labels = c("Atorvastaton","Fluvastatin","Pravastatin", "Rosvastatin", "Simvastatin")) +
+  labs(x = "Total Quantity Per Head", y = "Health Board", title = "Figure 1: Distribution of Statins Amongst Scottish Health Boards", caption = "(Drug Dosages have not been factored into this figure)") +
+  theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
 print(figure1)
+```
+From figure 1, Atorvastatin is the highest prescribed statin in all healthboards with NHS Orkney at a value of 3.44. It should be highlighted that Orkney does have a small population, 22,000, which is why it is larger than say NHS Greater Glasgow and Clyde with a population of 1,193,420. The lowest is fluvastatin in NHS Lanarkshire 0.0016 and this seems to be trend in other healthboards. Figure 1 also highlights that statin prescriptions are dominated by Atorvastatin, Simvastatin and Rosvastatin.
+
+#Section 2
+```{r importing datasets prescriptions in January from previous years}
+
 
 ```
 
