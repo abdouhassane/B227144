@@ -29,6 +29,8 @@ library(here)# directory structure
 library(knitr)
 library(readxl)
 library(paletteer)
+library(gt)
+library(gtExtras)
 ```
 
 In this assessment, I will be looking at heart medication prescriptions in Scotland, specifically statins. There are 5 major statins prescribed in the NHS: atorvastatin,fluvastatin, pravastatin, rosuvastatin, simvastatin. Statins are effective medications for lowering the risk of heart disease or stroke as they reduce build up of LDL cholesterol, the bad kind, which can lead to artery narrowing and blockages. If left to accumulate, this could lead to a heart attack or stroke.
@@ -84,11 +86,100 @@ figure1 <- Jan2024prescripclean %>%
   theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
 print(figure1)
 ```
+
 From figure 1, Atorvastatin is the highest prescribed statin in all healthboards with NHS Orkney at a value of 3.44. It should be highlighted that Orkney does have a small population, 22,000, which is why it is larger than say NHS Greater Glasgow and Clyde with a population of 1,193,420. The lowest is fluvastatin in NHS Lanarkshire 0.0016 and this seems to be trend in other healthboards. Figure 1 also highlights that statin prescriptions are dominated by Atorvastatin, Simvastatin and Rosvastatin.
 
-#Section 2
+#Section 3
 ```{r importing datasets prescriptions in January from previous years}
+#Import dataset for prescriptions in January 2020 until 2023 from opendata, Public Health Scotland using the link below.
+Jan2023prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/6caa7144-f0e4-4ab0-b9e4-8fa10c8edf1c/download/pitc202301.csv") %>% 
+  clean_names()
 
+Jan2022prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/53a53d61-3b3b-4a12-888b-a788ce13db9c/download/pitc202201.csv") %>% 
+  clean_names()
 
+Jan2021prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/7722a6e6-a6b6-49ec-aa63-fdc4bc727f05/download/pitc202101.csv") %>% 
+  clean_names()
+
+Jan2020prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/e5c841f2-3e16-428b-97db-0798ec7a5fb4/download/pitc202001.csv") %>% 
+  clean_names()
+#Import dataset for heart disease for Scottish health boards from Public Health Scotland
+Heart_disease_data <- read_csv("https://www.opendata.nhs.scot/dataset/0e17f3fc-9429-48aa-b1ba-2b7e55688253/resource/748e2065-b447-4b75-99bd-f17f26f3eaef/download/hd_activitybyhbr.csv") %>% 
+  clean_names()
+```
+
+```{r create gt table to illustrate chnges in statins from 2020 to 2024}
+#ceate a dataset that combines all previous years to set up for the table
+population_2020_2023 <- HB_populations %>% 
+  filter(sex == 'All', year %in% c(2020,2021,2022,2023), !hb == 'S92000003') %>% 
+  select(year,hb,all_ages) %>% 
+  full_join(HB_names, by = c("hb" = "HB")) %>%
+  select(hb,HBName,year,all_ages) %>% 
+  rename(population = all_ages)%>% 
+  filter(!is.na(population)) %>% 
+  mutate_at("year", as.character)
+
+statin4years <- bind_rows(Jan2023prescrip,Jan2022prescrip,Jan2021prescrip,Jan2020prescrip) %>% 
+  select(hbt,paid_date_month,bnf_item_description, number_of_paid_items:gross_ingredient_cost) %>% 
+  mutate(BNF_Drug_Statins = case_when(
+    str_detect(bnf_item_description, "^ATORVASTATIN") ~ "atorvastatin",
+    str_detect(bnf_item_description, "^FLUVASTATIN") ~ "fluvastatin",
+    str_detect(bnf_item_description, "^PRAVASTATIN") ~ "pravastatin",
+    str_detect(bnf_item_description, "^ROSUVASTATIN") ~ "rosuvastatin",
+    str_detect(bnf_item_description, "^SIMVASTATIN") ~ "simvastatin")) %>% 
+  mutate(paid_date_month = case_when(
+    str_detect(paid_date_month,"2023")~"2023",
+    str_detect(paid_date_month,"2022")~"2022",
+    str_detect(paid_date_month,"2021")~"2021",
+    str_detect(paid_date_month,"2020")~"2020",)) %>% 
+  filter(bnf_item_description!="", !is.na(BNF_Drug_Statins)) %>% 
+  select(-bnf_item_description) %>% 
+  full_join(HB_names, by = c("hbt" = "HB")) %>%
+  select(hbt,HBName,paid_date_month,BNF_Drug_Statins, number_of_paid_items:gross_ingredient_cost) %>% 
+  group_by(HBName,paid_date_month,BNF_Drug_Statins) %>% 
+  summarise(Total_paid_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost))
+
+clean_statin4years <- statin4years %>% 
+  full_join(population_2020_2023, by = c("HBName", "paid_date_month"="year")) %>% 
+  filter(!is.na(population)) %>% 
+  select(-hb) %>% 
+  mutate(quantity_per_head = (Total_paid_quantity/mean(population))) %>%
+  filter(HBName == "NHS Greater Glasgow and Clyde") %>% 
+  select(HBName,paid_date_month,BNF_Drug_Statins,quantity_per_head,Average_cost) %>% 
+  pivot_wider(names_from = paid_date_month, values_from = quantity_per_head:Average_cost) %>% 
+  select(HBName,BNF_Drug_Statins, 3,7,4,8,5,9,6,10) %>%
+  gt() %>%
+    tab_header( title = "Changes to Statin Prescriptions Over the Years", 
+                subtitle = "From 2020 to 2023 focusing on January" ) %>%
+  text_case_match(
+    "atorvastatin" ~ "Atorvastatin",
+    "fluvastatin" ~ "Fluvastatin",
+    "pravastatin" ~ "Pravastatin",
+    "rosuvastatin" ~ "Rosuvastatin",
+    "simvastatin" ~ "Simvastatin") %>% 
+  cols_label(
+    BNF_Drug_Statins = "Statin Type",
+    starts_with("quantity") ~ "Quantity per Head",
+    starts_with("Average") ~ "Average Cost",
+    starts_with("BNF") ~ ""
+  ) %>% 
+  tab_spanner( label = "2020",
+               columns = ends_with("2020")) %>% 
+  tab_spanner( label = "2021",
+               columns = ends_with("2021")) %>% 
+  tab_spanner( label = "2022",
+               columns = ends_with("2022")) %>% 
+  tab_spanner( label = "2023",
+               columns = ends_with("2023")) %>% 
+  fmt_currency(
+    columns = starts_with("Average"),
+    decimals = 2,
+    currency = "GBP") %>% 
+  fmt_number(
+    columns = starts_with("quantity"),
+    decimals = 3) %>% 
+  opt_stylize(style = 6, color = "blue")
+
+clean_statin4years
 ```
 
