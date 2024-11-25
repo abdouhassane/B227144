@@ -30,7 +30,10 @@ library(knitr)
 library(readxl)
 library(paletteer)
 library(gt)
-library(gtExtras)
+library(patchwork)
+library(sf)
+library(gganimate)
+library(lubridate)
 ```
 
 In this assessment, I will be looking at heart medication prescriptions in Scotland, specifically statins. There are 5 major statins prescribed in the NHS: atorvastatin,fluvastatin, pravastatin, rosuvastatin, simvastatin. Statins are effective medications for lowering the risk of heart disease or stroke as they reduce build up of LDL cholesterol, the bad kind, which can lead to artery narrowing and blockages. If left to accumulate, this could lead to a heart attack or stroke.
@@ -89,6 +92,47 @@ print(figure1)
 
 From figure 1, Atorvastatin is the highest prescribed statin in all healthboards with NHS Orkney at a value of 3.44. It should be highlighted that Orkney does have a small population, 22,000, which is why it is larger than say NHS Greater Glasgow and Clyde with a population of 1,193,420. The lowest is fluvastatin in NHS Lanarkshire 0.0016 and this seems to be trend in other healthboards. Figure 1 also highlights that statin prescriptions are dominated by Atorvastatin, Simvastatin and Rosvastatin.
 
+#Section 2
+
+In this section
+```{r importing shape files for Scottish heslth boards and heart disease data}
+#Import dataset for heart disease for Scottish health boards from Public Health Scotland
+heart_disease_data <- read_csv("https://www.opendata.nhs.scot/dataset/0e17f3fc-9429-48aa-b1ba-2b7e55688253/resource/748e2065-b447-4b75-99bd-f17f26f3eaef/download/hd_activitybyhbr.csv") %>% 
+  clean_names()
+#map data can be found from this link (need all 4 files to work): https://maps.gov.scot/ATOM/shapefiles/SG_NHS_HealthBoards_2019.zip
+phs_map <- st_read(here("data" ,"NHS_healthboards_2019.shp")) %>% 
+  clean_names() %>% 
+  mutate(hb_name = paste("NHS",hb_name))
+```
+
+```{r tidy the heart disease dataset and  plot on the map to show changes over time}
+#focusing the dataset on emergency admissions with a focus a crude rate. crude rate is defined as the number of events ocurring during a specificed time multiplied by 100,000 of the population.
+clean_heart_disease <- heart_disease_data %>% 
+  filter(financial_year %in% c("2019/20","2020/21","2021/22","2022/23"), sex == "All", age_group =="All", admission_type == "Emergency", !hbr %in% c("S92000003")) %>% 
+  select(financial_year,hbr,admission_type,diagnosis,crude_rate) %>% 
+  left_join(select(HB_names,HB,HBName), by = c("hbr" = "HB")) %>% 
+  select(financial_year,hbr,HBName,admission_type,diagnosis,crude_rate)
+
+#joining the map dataset with the clean heart disease dataset for map plotting.
+
+heart_disease_map <- clean_heart_disease %>% 
+  full_join(phs_map, by= c("hbr" = "hb_code")) %>% 
+  select(-hb_name) %>% 
+  transform(financial_year = as.numeric(substring(financial_year, 1, 4)) + 1)
+
+heart_disease_map_plot <- heart_disease_map %>% 
+  ggplot(aes(geometry = geometry, fill = crude_rate))+
+  geom_sf()
+
+change <- heart_disease_map_plot + 
+      labs(title = "Emergency Admissions for heart disease over from 2019 to 2023 {as_integer(frame_time)}") + transition_time(financial_year)
+
+animate_change <- animate(change, fps = 5)
+
+animate_change
+```
+
+
 #Section 3
 ```{r importing datasets prescriptions in January from previous years}
 #Import dataset for prescriptions in January 2020 until 2023 from opendata, Public Health Scotland using the link below.
@@ -139,7 +183,7 @@ statin4years <- bind_rows(Jan2023prescrip,Jan2022prescrip,Jan2021prescrip,Jan202
   group_by(HBName,paid_date_month,BNF_Drug_Statins) %>% 
   summarise(Total_paid_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost))
 
-clean_statin4years <- statin4years %>% 
+clean_statin4years_table <- statin4years %>% 
   full_join(population_2020_2023, by = c("HBName", "paid_date_month"="year")) %>% 
   filter(!is.na(population)) %>% 
   select(-hb) %>% 
@@ -161,8 +205,7 @@ clean_statin4years <- statin4years %>%
     BNF_Drug_Statins = "Statin Type",
     starts_with("quantity") ~ "Quantity per Head",
     starts_with("Average") ~ "Average Cost",
-    starts_with("BNF") ~ ""
-  ) %>% 
+    starts_with("BNF") ~ "") %>% 
   tab_spanner( label = "2020",
                columns = ends_with("2020")) %>% 
   tab_spanner( label = "2021",
@@ -180,6 +223,22 @@ clean_statin4years <- statin4years %>%
     decimals = 3) %>% 
   opt_stylize(style = 6, color = "blue")
 
-clean_statin4years
+clean_statin4years_table
+
+clean_statin4years_plot <- statin4years %>% 
+  full_join(population_2020_2023, by = c("HBName", "paid_date_month"="year")) %>% 
+  filter(!is.na(population)) %>% 
+  select(-hb) %>% 
+  mutate(quantity_per_head = (Total_paid_quantity/mean(population))) %>%
+  filter(HBName %in% c("NHS Greater Glasgow and Clyde")) %>% 
+  ggplot(aes(x = paid_date_month, y = quantity_per_head))+
+  geom_line(aes(group = BNF_Drug_Statins, color = BNF_Drug_Statins), linewidth = 1.8) +
+  theme_bw() +
+  scale_color_discrete(labels = c("Atorvastaton","Fluvastatin","Pravastatin", "Rosvastatin", "Simvastatin"))+
+  labs(x = "Year", y = "Statin Prescriptions per Head", title = "Figure 3: Changes to Statin Prescriptions Over Time",caption = "(NHS Greater Glasgow and Clyde)", color = "Statin")+
+  theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
+
+clean_statin4years_plot/wrap_table(clean_statin4years_table, space = "free_y")
+
 ```
 
