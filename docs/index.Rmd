@@ -36,7 +36,7 @@ In this assessment, I will be looking at heart medication prescriptions in Scotl
 
 In the first section I will look at statins prescribed in each health board, viewing the most prescribed and the associated costs. I will be focusing on January 2024 data.
 
-#Section 1
+# Section 1
 ```{r dataset import for figure 1 and rest of assessment}
 #Import dataset for prescriptions in January 2024 from opendata, Public Health Scotland using the link below.
 Jan2024prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/d3eaaf84-0f3b-4fb8-9460-e33503095fbe/download/pitc202401.csv") %>% 
@@ -90,7 +90,7 @@ figure1
 
 From figure 1, Atorvastatin is the highest prescribed statin in all healthboards with NHS Orkney at a value of 3.44. It should be highlighted that Orkney does have a small population, 22,000, which is why it is larger than say NHS Greater Glasgow and Clyde with a population of 1,193,420. The lowest is fluvastatin in NHS Lanarkshire 0.0016 and this seems to be trend in other healthboards. Figure 1 also highlights that statin prescriptions are dominated by Atorvastatin, Simvastatin and Rosvastatin.
 
-#Section 2
+# Section 2
 
 In this section, the focus will be on heart disease in Scottish health boards.
 ```{r importing shape files for Scottish heslth boards and heart disease data}
@@ -135,7 +135,7 @@ figure2
 
 From figure 2 the crude rate of heart attack emergency admissions are plotted across years 2020 and 2023. It is important that although NHS Greater Glasgow and Clyde, NHS Lanarkshire and NHS Lothian have the 3 largest population the crude rate is low which can be misinterpreted as good. From 2020 to 2023 the changes in heart attack emergency admissions have decreased slightly with some outliers like NHS Shetland and NHS Ayrshire and Arran.Additionally, there a lot of confounding factors to consider like hospital access, population size or the type of medication taken which could explain the change in crude rate. Therefore, the reduction in crude rate cannot be solely contributed to statin uptake by the general populus although it does highlight that heart attacks have reduced from 2020 to 2023.
 
-#Section 3
+# Section 3
 This section will look more at changes to average costs of statins and quanity prescribed per head from 2020 to 2023. The focus will be on NHS Greater Glasgow and Clyde as it has the largest population.
 ```{r importing datasets prescriptions in January from previous years}
 #Import dataset for prescriptions in January 2020 until 2023 from opendata, Public Health Scotland using the link below.
@@ -246,11 +246,13 @@ figure3 <- statin4years %>%
   theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
 
 figure3
+
 clean_statin4years_table
 ```
 
+
 Figure 3 was plotted to highlight that quantity per head columns in table 1 to allow for easier visualization. From figure 3, Fluvastatin has been prescribed the lowest with minimal changes throughout the years whilst Atorvastatin remains the highest prescribed and increasing significantly since 2021. Simvastatin follows a similar trajectory but mirrorred. Dawn Connely highlights that Atorvastatin had lost its patent since 2012 and the cost of the NHS prescribing it dropped from £311 million to £42 million and Simvastatin does have side effect of myopathy, muscle weakness. Furthermore as NICE recommends Atorvastatin for first line of treatment for patients with high cholesteroh. Both previous enforce the popularity of Atorvastatin over other statins. Although the average cost columns in table 1 highlight a higher average gross ingredient cost for Atorvastatin compared to others, interestingly the average cost drops by 4.65% whilst Simvastatin drops by 11.4%. Although the remaining 3 statins maintain a similar average cost across from 2020 to 2023 they are prescribed significantly less. it is more cost effective and with less side effects when compared to other statins.
 
-#References
+# References
 1. The Pharmaceutical Journal, PJ, September 2018, Vol 301, No 7917;301(7917):DOI:10.1211/PJ.2018.20205512 
 
