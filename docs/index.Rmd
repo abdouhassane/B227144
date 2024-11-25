@@ -23,17 +23,13 @@ knitr::opts_chunk$set(echo = TRUE, include=TRUE, message=FALSE,warning=FALSE)
 Library setup for assessment ahead.
 ```{r warning=FALSE}
 library(tidyverse)
-library(janitor) # cleaning data
-library(gt) # tables
-library(here)# directory structure
-library(knitr)
-library(readxl)
-library(paletteer)
-library(gt)
-library(patchwork)
-library(sf)
-library(lubridate)
-library(ggrepel)
+library(janitor) #cleaning data
+library(gt)  #tables
+library(here) #directory structure
+library(knitr) #generate reports
+library(paletteer) #custome colour palettes to load for better data visualisation
+library(sf) #load in sf object to create maps
+library(lubridate) #converting time more easily
 ```
 
 In this assessment, I will be looking at heart medication prescriptions in Scotland, specifically statins. There are 5 major statins prescribed in the NHS: atorvastatin,fluvastatin, pravastatin, rosuvastatin, simvastatin. Statins are effective medications for lowering the risk of heart disease or stroke as they reduce build up of LDL cholesterol, the bad kind, which can lead to artery narrowing and blockages. If left to accumulate, this could lead to a heart attack or stroke.
@@ -88,7 +84,8 @@ figure1 <- Jan2024prescripclean %>%
   scale_fill_paletteer_d("ggsci::default_locuszoom", name = "Types of Statin", labels = c("Atorvastaton","Fluvastatin","Pravastatin", "Rosvastatin", "Simvastatin")) +
   labs(x = "Total Quantity Per Head", y = "Health Board", title = "Figure 1: Distribution of Statins Amongst Scottish Health Boards", caption = "(Drug Dosages have not been factored into this figure)") +
   theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
-print(figure1)
+
+figure1
 ```
 
 From figure 1, Atorvastatin is the highest prescribed statin in all healthboards with NHS Orkney at a value of 3.44. It should be highlighted that Orkney does have a small population, 22,000, which is why it is larger than say NHS Greater Glasgow and Clyde with a population of 1,193,420. The lowest is fluvastatin in NHS Lanarkshire 0.0016 and this seems to be trend in other healthboards. Figure 1 also highlights that statin prescriptions are dominated by Atorvastatin, Simvastatin and Rosvastatin.
@@ -200,7 +197,7 @@ clean_statin4years_table <- statin4years %>%
   select(HBName,BNF_Drug_Statins, 3,7,4,8,5,9,6,10) %>%
   gt() %>%
   #create table title.
-    tab_header( title = "Changes to Statin Prescriptions Over the Years", 
+    tab_header( title = "Table 1: Changes to Statin Prescriptions Over the Years", 
                 subtitle = "From 2020 to 2023 focusing on January" ) %>%
   #rename statins with capital.
   text_case_match(
@@ -251,4 +248,9 @@ figure3 <- statin4years %>%
 figure3
 clean_statin4years_table
 ```
+
+Figure 3 was plotted to highlight that quantity per head columns in table 1 to allow for easier visualization. From figure 3, Fluvastatin has been prescribed the lowest with minimal changes throughout the years whilst Atorvastatin remains the highest prescribed and increasing significantly since 2021. Simvastatin follows a similar trajectory but mirrorred. Dawn Connely highlights that Atorvastatin had lost its patent since 2012 and the cost of the NHS prescribing it dropped from £311 million to £42 million and Simvastatin does have side effect of myopathy, muscle weakness. Furthermore as NICE recommends Atorvastatin for first line of treatment for patients with high cholesteroh. Both previous enforce the popularity of Atorvastatin over other statins. Although the average cost columns in table 1 highlight a higher average gross ingredient cost for Atorvastatin compared to others, interestingly the average cost drops by 4.65% whilst Simvastatin drops by 11.4%. Although the remaining 3 statins maintain a similar average cost across from 2020 to 2023 they are prescribed significantly less. it is more cost effective and with less side effects when compared to other statins.
+
+#References
+1. The Pharmaceutical Journal, PJ, September 2018, Vol 301, No 7917;301(7917):DOI:10.1211/PJ.2018.20205512 
 
