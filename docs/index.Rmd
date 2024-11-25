@@ -32,8 +32,8 @@ library(paletteer)
 library(gt)
 library(patchwork)
 library(sf)
-library(gganimate)
 library(lubridate)
+library(ggrepel)
 ```
 
 In this assessment, I will be looking at heart medication prescriptions in Scotland, specifically statins. There are 5 major statins prescribed in the NHS: atorvastatin,fluvastatin, pravastatin, rosuvastatin, simvastatin. Statins are effective medications for lowering the risk of heart disease or stroke as they reduce build up of LDL cholesterol, the bad kind, which can lead to artery narrowing and blockages. If left to accumulate, this could lead to a heart attack or stroke.
@@ -52,7 +52,7 @@ HB_populations <- read_csv("https://www.opendata.nhs.scot/dataset/7f010430-6ce1-
   clean_names()
 ```
 
-```{r January 2024, distribution of statins amongst Scottish health boards}
+```{r January 2024, distribution of statins amongst Scottish health boards, fig.align = 'center'}
 #focusing on health board populations for year 2023 as its the most recent.
 population_2023 <- HB_populations %>% 
   filter(sex == 'All', year == 2023, !hb == 'S92000003') %>% 
@@ -65,6 +65,7 @@ population_2023 <- HB_populations %>%
 Jan2024prescripclean <- Jan2024prescrip  %>% 
 #creating a new column for statins and simplifying different dosages into one name for simpler analysis.
   mutate(BNF_Drug_Statins = case_when(
+    #renaming into lowercase for readability and easier to deal if filtered.
     str_detect(bnf_item_description, "^ATORVASTATIN") ~ "atorvastatin",
     str_detect(bnf_item_description, "^FLUVASTATIN") ~ "fluvastatin",
     str_detect(bnf_item_description, "^PRAVASTATIN") ~ "pravastatin",
@@ -94,7 +95,7 @@ From figure 1, Atorvastatin is the highest prescribed statin in all healthboards
 
 #Section 2
 
-In this section
+In this section, the focus will be on heart disease in Scottish health boards.
 ```{r importing shape files for Scottish heslth boards and heart disease data}
 #Import dataset for heart disease for Scottish health boards from Public Health Scotland
 heart_disease_data <- read_csv("https://www.opendata.nhs.scot/dataset/0e17f3fc-9429-48aa-b1ba-2b7e55688253/resource/748e2065-b447-4b75-99bd-f17f26f3eaef/download/hd_activitybyhbr.csv") %>% 
@@ -105,8 +106,8 @@ phs_map <- st_read(here("data" ,"NHS_healthboards_2019.shp")) %>%
   mutate(hb_name = paste("NHS",hb_name))
 ```
 
-```{r tidy the heart disease dataset and  plot on the map to show changes over time}
-#focusing the dataset on emergency admissions with a focus a crude rate. crude rate is defined as the number of events ocurring during a specificed time multiplied by 100,000 of the population.
+```{r tidy the heart disease dataset and  plot on the map to show changes over time, fig.align = 'center'}
+#focusing the dataset on emergency admissions with a focus a crude rate. crude rate is defined as the number of events occurring during a specified time multiplied by 100,000 of the population.
 clean_heart_disease <- heart_disease_data %>% 
   filter(financial_year %in% c("2019/20","2020/21","2021/22","2022/23"), sex == "All", age_group =="All", admission_type == "Emergency", !hbr %in% c("S92000003")) %>% 
   select(financial_year,hbr,admission_type,diagnosis,crude_rate) %>% 
@@ -114,55 +115,57 @@ clean_heart_disease <- heart_disease_data %>%
   select(financial_year,hbr,HBName,admission_type,diagnosis,crude_rate)
 
 #joining the map dataset with the clean heart disease dataset for map plotting.
-
 heart_disease_map <- clean_heart_disease %>% 
   full_join(phs_map, by= c("hbr" = "hb_code")) %>% 
-  select(-hb_name) %>% 
+  select(-hb_name) %>%
+  #convert financial year character values into numeric as it is easier to work with.
   transform(financial_year = as.numeric(substring(financial_year, 1, 4)) + 1)
 
-heart_disease_map_plot <- heart_disease_map %>% 
+#plotting graph with a focus on heart attacks and emergency admissions in the 2020.
+figure2 <- heart_disease_map %>%
+  filter(financial_year %in% c(2020,2023), diagnosis =="Heart Attack") %>%
+  #joining the heart disease sf map with the clean heart disease data converts it to a tibble. Need the state to R that geometry column exists otherwise error shows.
   ggplot(aes(geometry = geometry, fill = crude_rate))+
-  geom_sf()
+  geom_sf(color = "black", linewidth = 0.25) +
+  geom_sf_label(aes(label = HBName), size = 1.75)+
+  theme_void()+
+  facet_wrap(.~financial_year)+
+  scale_fill_paletteer_c("grDevices::PinkYl")+
+  labs(title = "Heart Attack Emergency Admissions", fill = "Crude Rate \nper 100,000", plot.title = element_text(hjust = 0.5))
 
-change <- heart_disease_map_plot + 
-      labs(title = "Emergency Admissions for heart disease over from 2019 to 2023 {as_integer(frame_time)}") + transition_time(financial_year)
-
-animate_change <- animate(change, fps = 5)
-
-animate_change
+figure2
 ```
 
+From figure 2 the crude rate of heart attack emergency admissions are plotted across years 2020 and 2023. It is important that although NHS Greater Glasgow and Clyde, NHS Lanarkshire and NHS Lothian have the 3 largest population the crude rate is low which can be misinterpreted as good. From 2020 to 2023 the changes in heart attack emergency admissions have decreased slightly with some outliers like NHS Shetland and NHS Ayrshire and Arran.Additionally, there a lot of confounding factors to consider like hospital access, population size or the type of medication taken which could explain the change in crude rate. Therefore, the reduction in crude rate cannot be solely contributed to statin uptake by the general populus although it does highlight that heart attacks have reduced from 2020 to 2023.
 
 #Section 3
+This section will look more at changes to average costs of statins and quanity prescribed per head from 2020 to 2023. The focus will be on NHS Greater Glasgow and Clyde as it has the largest population.
 ```{r importing datasets prescriptions in January from previous years}
 #Import dataset for prescriptions in January 2020 until 2023 from opendata, Public Health Scotland using the link below.
 Jan2023prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/6caa7144-f0e4-4ab0-b9e4-8fa10c8edf1c/download/pitc202301.csv") %>% 
   clean_names()
-
 Jan2022prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/53a53d61-3b3b-4a12-888b-a788ce13db9c/download/pitc202201.csv") %>% 
   clean_names()
-
 Jan2021prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/7722a6e6-a6b6-49ec-aa63-fdc4bc727f05/download/pitc202101.csv") %>% 
   clean_names()
-
 Jan2020prescrip <- read_csv("https://www.opendata.nhs.scot/dataset/84393984-14e9-4b0d-a797-b288db64d088/resource/e5c841f2-3e16-428b-97db-0798ec7a5fb4/download/pitc202001.csv") %>% 
-  clean_names()
-#Import dataset for heart disease for Scottish health boards from Public Health Scotland
-Heart_disease_data <- read_csv("https://www.opendata.nhs.scot/dataset/0e17f3fc-9429-48aa-b1ba-2b7e55688253/resource/748e2065-b447-4b75-99bd-f17f26f3eaef/download/hd_activitybyhbr.csv") %>% 
   clean_names()
 ```
 
-```{r create gt table to illustrate chnges in statins from 2020 to 2024}
+```{r create gt table to illustrate chnges in statins from 2020 to 2023, fig.align = 'center'}
 #ceate a dataset that combines all previous years to set up for the table
-population_2020_2023 <- HB_populations %>% 
+population_2020_2023 <- HB_populations %>%
+  #S92000003 NHS Scotland needs to be removed from data and filtering out for years of interest.
   filter(sex == 'All', year %in% c(2020,2021,2022,2023), !hb == 'S92000003') %>% 
   select(year,hb,all_ages) %>% 
   full_join(HB_names, by = c("hb" = "HB")) %>%
   select(hb,HBName,year,all_ages) %>% 
   rename(population = all_ages)%>% 
-  filter(!is.na(population)) %>% 
+  filter(!is.na(population)) %>%
+  #converting the year into a character column makes it easier when dealing with gt table.
   mutate_at("year", as.character)
 
+#combine all January prescription datasets into 1 table as they all have the same columns.
 statin4years <- bind_rows(Jan2023prescrip,Jan2022prescrip,Jan2021prescrip,Jan2020prescrip) %>% 
   select(hbt,paid_date_month,bnf_item_description, number_of_paid_items:gross_ingredient_cost) %>% 
   mutate(BNF_Drug_Statins = case_when(
@@ -183,6 +186,7 @@ statin4years <- bind_rows(Jan2023prescrip,Jan2022prescrip,Jan2021prescrip,Jan202
   group_by(HBName,paid_date_month,BNF_Drug_Statins) %>% 
   summarise(Total_paid_quantity = sum(paid_quantity), Average_cost = mean(gross_ingredient_cost))
 
+#setting up object for gt table creation.
 clean_statin4years_table <- statin4years %>% 
   full_join(population_2020_2023, by = c("HBName", "paid_date_month"="year")) %>% 
   filter(!is.na(population)) %>% 
@@ -190,22 +194,28 @@ clean_statin4years_table <- statin4years %>%
   mutate(quantity_per_head = (Total_paid_quantity/mean(population))) %>%
   filter(HBName == "NHS Greater Glasgow and Clyde") %>% 
   select(HBName,paid_date_month,BNF_Drug_Statins,quantity_per_head,Average_cost) %>% 
-  pivot_wider(names_from = paid_date_month, values_from = quantity_per_head:Average_cost) %>% 
+  #pivot wider was used to convert the table into an easy to read format.
+  pivot_wider(names_from = paid_date_month, values_from = quantity_per_head:Average_cost) %>%
+  #columns needed to be reordered to prepare for table creation. numbers were used as the column names alternated every 2 columns.
   select(HBName,BNF_Drug_Statins, 3,7,4,8,5,9,6,10) %>%
   gt() %>%
+  #create table title.
     tab_header( title = "Changes to Statin Prescriptions Over the Years", 
                 subtitle = "From 2020 to 2023 focusing on January" ) %>%
+  #rename statins with capital.
   text_case_match(
     "atorvastatin" ~ "Atorvastatin",
     "fluvastatin" ~ "Fluvastatin",
     "pravastatin" ~ "Pravastatin",
     "rosuvastatin" ~ "Rosuvastatin",
     "simvastatin" ~ "Simvastatin") %>% 
+  #rename column labels
   cols_label(
     BNF_Drug_Statins = "Statin Type",
     starts_with("quantity") ~ "Quantity per Head",
     starts_with("Average") ~ "Average Cost",
     starts_with("BNF") ~ "") %>% 
+  #sub title were used to make the columns more readable.
   tab_spanner( label = "2020",
                columns = ends_with("2020")) %>% 
   tab_spanner( label = "2021",
@@ -214,18 +224,18 @@ clean_statin4years_table <- statin4years %>%
                columns = ends_with("2022")) %>% 
   tab_spanner( label = "2023",
                columns = ends_with("2023")) %>% 
+  #introduce currency symbol for average cost columns.
   fmt_currency(
     columns = starts_with("Average"),
     decimals = 2,
     currency = "GBP") %>% 
+  #clean the numbers to make it more readable.
   fmt_number(
     columns = starts_with("quantity"),
     decimals = 3) %>% 
   opt_stylize(style = 6, color = "blue")
 
-clean_statin4years_table
-
-clean_statin4years_plot <- statin4years %>% 
+figure3 <- statin4years %>% 
   full_join(population_2020_2023, by = c("HBName", "paid_date_month"="year")) %>% 
   filter(!is.na(population)) %>% 
   select(-hb) %>% 
@@ -238,7 +248,7 @@ clean_statin4years_plot <- statin4years %>%
   labs(x = "Year", y = "Statin Prescriptions per Head", title = "Figure 3: Changes to Statin Prescriptions Over Time",caption = "(NHS Greater Glasgow and Clyde)", color = "Statin")+
   theme(plot.caption = element_text(hjust = 0.5), plot.title = element_text(hjust = 0.5))
 
-clean_statin4years_plot/wrap_table(clean_statin4years_table, space = "free_y")
-
+figure3
+clean_statin4years_table
 ```
 
